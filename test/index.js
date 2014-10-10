@@ -21,7 +21,7 @@ describe('Token', function () {
     return 'Bearer ' + jwt.sign({username : username}, privateKey, options);
   };
 
-  var loadUser = function (decodedToken, callback) {
+  var loadUser = function (decodedToken, _, callback) {
     var username = decodedToken.username;
 
     if (username === 'john') {
