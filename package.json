@@ -20,12 +20,12 @@
     "jsonwebtoken": "^4.2.0"
   },
   "peerDependencies": {
-    "hapi": ">=8.x.x"
+    "hapi": ">=9.x.x"
   },
   "devDependencies": {
     "boom": "2.x.x",
     "code": "1.x.x",
-    "hapi": "8.x.x",
+    "hapi": "9.x.x",
     "lab": "5.x.x",
     "grunt": "0.4.x",
     "grunt-contrib-jshint": "0.11.x",
