@@ -19,9 +19,6 @@
     "hoek": "2.x.x",
     "jsonwebtoken": "^5.4.1"
   },
-  "peerDependencies": {
-    "hapi": ">=11.x.x"
-  },
   "devDependencies": {
     "boom": "2.x.x",
     "code": "1.x.x",
