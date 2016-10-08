@@ -15,6 +15,10 @@ JSON Web Token authentication requires verifying a signed token. The `'jwt'` sch
         - `credentials` - a credentials object passed back to the application in `request.auth.credentials`. Typically, `credentials` are only
           included when `isValid` is `true`, but there are cases when the application needs to know who tried to authenticate even when it fails
           (e.g. with authentication mode `'try'`).
+- `audience` (optional): string or array of strings of valid values for the `aud` field.
+- `issuer` (optional): string or array of strings of valid values for the `iss` field.
+- `algorithms` (optional): List of strings with the names of the allowed algorithms. For instance, `["HS256", "RS256"]`.
+- `subject` (optional): string of valid values for the `sub` field
 
 See the example folder for an executable example.
 
@@ -45,7 +49,7 @@ var privateKey = 'BbZJjyoXAdr8BUZuiKKARWimKfrSmQ6fv8kZ7OFfc';
 var token = jwt.sign({ accountId: 123 }, privateKey);
 
 
-var validate = function (decodedToken, callback) {
+var validate = function (decodedToken, extraInfo, callback) {
 
     var error,
         credentials = accounts[decodedToken.accountId] || {};
@@ -90,3 +94,16 @@ server.register(require('hapi-auth-jwt'), function (error) {
 server.start();
 
 ```
+
+You can specify audience, issuer, algorithms and/or subject as well:
+
+```javascript
+server.auth.strategy('token', 'jwt', {
+    key: privateKey,
+    validateFunc: validate,
+    audience: 'http://myapi/protected',
+    issuer: 'http://issuer',
+    algorithms: ['RS256'],
+    subject: 'myRequiredSubject'
+});
+```    

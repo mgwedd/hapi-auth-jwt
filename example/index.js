@@ -19,10 +19,17 @@ var token = jwt.sign({ accountId: 123 }, privateKey);
 
 // use this token to build your web request.  You'll need to add it to the headers as 'authorization'.  And you will need to prefix it with 'Bearer '
 console.log('token: ' + token);
+console.log();
+console.log('=== Sample call to secure endpoint: ===');
+console.log("curl 'http://localhost:8080/tokenRequired' -H 'Content-Type:application/json' -H 'Authorization: Bearer " + token + "'");
+console.log();
+console.log('=== Sample call to public endpoint: ===');
+console.log("curl 'http://localhost:8080/noTokenRequired' -H 'Content-Type:application/json'");
 
-var validate = function (decodedToken, callback) {
+var validate = function (decodedToken, extraInfo, callback) {
 
-    console.log(decodedToken);  // should be {accountId : 123}.
+    console.log('decodedToken',decodedToken);  // should be {accountId : 123}.
+    console.log('extraInfo',extraInfo);  
 
     if (decodedToken) {
       console.log(decodedToken.accountId.toString());
