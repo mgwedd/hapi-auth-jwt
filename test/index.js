@@ -723,8 +723,23 @@ describe('Strategy', function(){
       }
       catch(err){
         expect(err).to.exist;
-        expect(err.message).to.equal('child "key" fails because ["key" must be a string, "key" must be a Function]');
+        expect(err.message).to.equal('child "key" fails because ["key" must be a buffer or a string, "key" must be a Function]');
         done();
+      }
+    });
+  });
+
+  it('should work if strategy is initialized with a Bugger as key in options', function (done) {
+    var server = new Hapi.Server({ debug: false  });
+    server.connection();
+    server.register(require('../'), function (err) {
+      expect(err).to.not.exist;
+      try {
+        server.auth.strategy('default', 'jwt', 'required', {key: new Buffer('mySuperSecret', 'base64')});
+        done();
+      }
+      catch(err){
+        done(err);
       }
     });
   });
