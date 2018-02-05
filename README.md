@@ -26,9 +26,7 @@ See the example folder for an executable example.
 
 var Hapi = require('hapi'),
     jwt = require('jsonwebtoken'),
-    server = new Hapi.Server();
-
-server.connection({ port: 8080 });
+    server = new Hapi.Server({ port: 8080 });
 
 
 var accounts = {
@@ -49,49 +47,50 @@ var privateKey = 'BbZJjyoXAdr8BUZuiKKARWimKfrSmQ6fv8kZ7OFfc';
 var token = jwt.sign({ accountId: 123 }, privateKey);
 
 
-var validate = function (decodedToken, extraInfo, callback) {
+var validate = async function (decodedToken, extraInfo) {
 
-    var error,
-        credentials = accounts[decodedToken.accountId] || {};
+    var credentials = accounts[decodedToken.accountId] || {};
 
     if (!credentials) {
-        return callback(error, false, credentials);
+        return { isValid: false };
     }
 
-    return callback(error, true, credentials)
+    return { 
+      isValid: true, 
+      credentials:credentials 
+    }
 };
 
 
-server.register(require('hapi-auth-jwt'), function (error) {
+await server.register(require('hapi-auth-jwt'));
 
-    server.auth.strategy('token', 'jwt', {
-        key: privateKey,
-        validateFunc: validate
-    });
+server.auth.strategy('token', 'jwt', {
+    key: privateKey,
+    validateFunc: validate
+});
 
-    server.route({
-        method: 'GET',
-        path: '/',
-        config: {
-            auth: 'token'
-        }
-    });
+server.route({
+    method: 'GET',
+    path: '/',
+    config: {
+        auth: 'token'
+    }
+});
 
     // With scope requirements
-    server.route({
-        method: 'GET',
-        path: '/withScope',
-        config: {
-            auth: {
-                strategy: 'token',
-                scope: ['a']
-            }
+server.route({
+    method: 'GET',
+    path: '/withScope',
+    config: {
+        auth: {
+            strategy: 'token',
+            scope: ['a']
         }
-    });
+    }
 });
 
 
-server.start();
+await server.start();
 
 ```
 
