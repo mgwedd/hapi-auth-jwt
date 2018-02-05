@@ -26,599 +26,514 @@ describe('Token', function () {
     return 'Bearer ' + Jwt.sign({username : username}, privateKey, options);
   };
 
-  var loadUser = function (decodedToken, _, callback) {
+  var loadUser = function (decodedToken) {
     var username = decodedToken.username;
 
     if (username === 'john') {
-      return callback(null, true, {
-        user: 'john',
-        scope: ['a']
-      });
+      return {
+        isValid: true,
+        credentials: {user: 'john', scope: ['a'] }
+      };
     } else if (username === 'jane') {
-      return callback(Boom.badImplementation());
+      throw Boom.badImplementation();
     } else if (username === 'invalid1') {
-      return callback(null, true, 'bad');
+      return {
+        isValid: true,
+        credentials: 'bad'
+      };
     } else if (username === 'nullman') {
-      return callback(null, true, null);
+      return {
+        isValid: true,
+        credentials: null,
+      };
     }
-
-    return callback(null, false);
+    return {
+      isValid: false,
+    };
   };
 
-  var tokenHandler = function (request, reply) {
+  var tokenHandler = () => 'ok';
 
-    reply('ok');
-  };
-
-  var doubleHandler = function (request, reply) {
-
+  var doubleHandler = async function (request, h) {
     var options = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') }, credentials: request.auth.credentials };
+    var res = await server.inject(options);
 
-    server.inject(options, function (res) {
-
-      reply(res.result);
-    });
+    return res.result;
   };
 
   var server = new Hapi.Server({ debug: false });
-  server.connection();
 
-  before(function (done) {
+  before(async function () {
 
-    server.register(require('../'), function (err) {
+    await server.register(require('../'))
+    server.auth.strategy('default', 'jwt', { key: privateKey,  validateFunc: loadUser });
+    server.auth.default('default');
 
-      expect(err).to.not.exist;
-      server.auth.strategy('default', 'jwt', 'required', { key: privateKey,  validateFunc: loadUser});
+    server.route([
+      { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } },
+      { method: 'POST', path: '/tokenOptional', handler: tokenHandler, config: { auth: { mode: 'optional' } } },
+      { method: 'POST', path: '/tokenScope', handler: tokenHandler, config: { auth: { scope: 'x' } } },
+      { method: 'POST', path: '/tokenArrayScope', handler: tokenHandler, config: { auth: { scope: ['x', 'y'] } } },
+      { method: 'POST', path: '/tokenArrayScopeA', handler: tokenHandler, config: { auth: { scope: ['x', 'y', 'a'] } } },
+      { method: 'POST', path: '/double', handler: doubleHandler }
+    ]);
 
-      server.route([
-        { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } },
-        { method: 'POST', path: '/tokenOptional', handler: tokenHandler, config: { auth: { mode: 'optional' } } },
-        { method: 'POST', path: '/tokenScope', handler: tokenHandler, config: { auth: { scope: 'x' } } },
-        { method: 'POST', path: '/tokenArrayScope', handler: tokenHandler, config: { auth: { scope: ['x', 'y'] } } },
-        { method: 'POST', path: '/tokenArrayScopeA', handler: tokenHandler, config: { auth: { scope: ['x', 'y', 'a'] } } },
-        { method: 'POST', path: '/double', handler: doubleHandler }
-      ]);
-
-      done();
-    });
+    await server.start();
   });
 
-  it('returns a reply on successful auth', function (done) {
-
+  it('returns a reply on successful auth', async function () {
     var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') } };
 
-    server.inject(request, function (res) {
-
-      expect(res.result).to.exist;
-      expect(res.result).to.equal('ok');
-      done();
-    });
+    var res = await server.inject(request);
+    expect(res.result).to.exist;
+    expect(res.result).to.equal('ok');
   });
 
-  it('returns decoded token when no validation function is set', function (done) {
+  it('returns decoded token when no validation function is set', async function () {
 
-    var handler = function (request, reply) {
+    var handler = function (request) {
       expect(request.auth.isAuthenticated).to.equal(true);
       expect(request.auth.credentials).to.exist;
-      reply('ok');
+      return 'ok';
     };
 
     var server = new Hapi.Server({ debug: false });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
+    await server.register(require('../'));
 
-      server.auth.strategy('default', 'jwt', 'required', { key: privateKey });
-
-      server.route([
-        { method: 'POST', path: '/token', handler: handler, config: { auth: 'default' } }
-      ]);
-    });
+    server.auth.strategy('default', 'jwt', { key: privateKey });
+    server.route([
+      { method: 'POST', path: '/token', handler: handler, config: { auth: 'default' } }
+    ]);
 
     var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') } };
 
-    server.inject(request, function (res) {
-
-      expect(res.result).to.exist;
-      expect(res.result).to.equal('ok');
-      done();
-    });
+    const res = await server.inject(request);
+    expect(res.result).to.exist;
+    expect(res.result).to.equal('ok');
   });
 
-  it('returns an error on wrong scheme', function (done) {
+  it('returns an error on wrong scheme', async function () {
 
     var request = { method: 'POST', url: '/token', headers: { authorization: 'Steve something' } };
+    const res = await server.inject(request)
 
-    server.inject(request, function (res) {
-
-      expect(res.statusCode).to.equal(401);
-      done();
-    });
+    expect(res.statusCode).to.equal(401);
   });
 
-  it('returns a reply on successful double auth', function (done) {
+  it('returns a reply on successful double auth', async function () {
 
     var request = { method: 'POST', url: '/double', headers: { authorization: tokenHeader('john') } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
+    expect(res.result).to.exist;
+    expect(res.result).to.equal('ok');
 
-      expect(res.result).to.exist;
-      expect(res.result).to.equal('ok');
-      done();
-    });
   });
 
-  it('returns a reply on failed optional auth', function (done) {
+  it('returns a reply on failed optional auth', async function () {
 
     var request = { method: 'POST', url: '/tokenOptional' };
 
-    server.inject(request, function (res) {
-
-      expect(res.result).to.equal('ok');
-      done();
-    });
+    const res = await server.inject(request);
+    expect(res.result).to.equal('ok');
   });
 
-  it('returns an error with expired token', function (done) {
+  it('returns an error with expired token', async function () {
 
     var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', { expiresIn: -10 }) } };
 
-    server.inject(request, function (res) {
-      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt expired');
-      expect(res.statusCode).to.equal(401);
-      done();
-    });
+    const res = await server.inject(request);
+    expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt expired');
+    expect(res.statusCode).to.equal(401);
+
   });
 
-  it('returns an error with invalid token', function (done) {
+  it('returns an error with invalid token', async function () {
     var token = tokenHeader('john') + '123456123123';
 
     var request = { method: 'POST', url: '/token', headers: { authorization: token } };
 
-    server.inject(request, function (res) {
-      expect(res.result.message).to.equal(jwtErrorPrefix + 'invalid signature');
-      expect(res.statusCode).to.equal(401);
-      done();
-    });
+    const res = await server.inject(request);
+    expect(res.result.message).to.equal(jwtErrorPrefix + 'invalid signature');
+    expect(res.statusCode).to.equal(401);
   });
 
-  it('returns an error on bad header format', function (done) {
+  it('returns an error on bad header format', async function () {
 
     var request = { method: 'POST', url: '/token', headers: { authorization: 'Bearer' } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(400);
-      expect(res.result.isMissing).to.equal(undefined);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(400);
+    expect(res.result.isMissing).to.equal(undefined);
+
   });
 
-  it('returns an error on bad header format', function (done) {
+  it('returns an error on bad header format', async function () {
 
     var request = { method: 'POST', url: '/token', headers: { authorization: 'bearer' } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(400);
-      expect(res.result.isMissing).to.equal(undefined);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(400);
+    expect(res.result.isMissing).to.equal(undefined);
   });
 
-  it('returns an error on bad header internal syntax', function (done) {
+  it('returns an error on bad header internal syntax', async function () {
 
     var request = { method: 'POST', url: '/token', headers: { authorization: 'bearer 123' } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(400);
-      expect(res.result.isMissing).to.equal(undefined);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(400);
+    expect(res.result.isMissing).to.equal(undefined);
   });
 
-  it('returns an error on unknown user', function (done) {
+  it('returns an error on unknown user', async function () {
 
     var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('doe') } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(401);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(401);
   });
 
-  it('returns an error on internal user lookup error', function (done) {
+  it('returns an error on internal user lookup error', async function () {
 
     var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('jane') } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(500);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(500);
   });
 
-  it('returns an error on non-object credentials error', function (done) {
+  it('returns an error on non-object credentials error', async function () {
 
     var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('invalid1') } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(500);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(500);
   });
 
-  it('returns an error on null credentials error', function (done) {
+  it('returns an error on null credentials error', async function () {
 
     var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('nullman') } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(500);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(500);
   });
 
-  it('returns an error on insufficient scope', function (done) {
+  it('returns an error on insufficient scope', async function () {
 
     var request = { method: 'POST', url: '/tokenScope', headers: { authorization: tokenHeader('john') } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(403);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(403);
   });
 
-  it('returns an error on insufficient scope specified as an array', function (done) {
+  it('returns an error on insufficient scope specified as an array', async function () {
 
     var request = { method: 'POST', url: '/tokenArrayScope', headers: { authorization: tokenHeader('john') } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(403);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(403);
+
   });
 
-  it('authenticates scope specified as an array', function (done) {
+  it('authenticates scope specified as an array', async function () {
 
     var request = { method: 'POST', url: '/tokenArrayScopeA', headers: { authorization: tokenHeader('john') } };
 
-    server.inject(request, function (res) {
+    const res = await server.inject(request);
 
-      expect(res.result).to.exist;
-      expect(res.statusCode).to.equal(200);
-      done();
-    });
+    expect(res.result).to.exist;
+    expect(res.statusCode).to.equal(200);
   });
 
-  it('cannot add a route that has payload validation required', function (done) {
+  it('cannot add a route that has payload validation required', async function () {
 
     var fn = function () {
-
       server.route({ method: 'POST', path: '/tokenPayload', handler: tokenHandler, config: { auth: { mode: 'required', payload: 'required' } } });
     };
 
     expect(fn).to.throw(Error);
-    done();
   });
 
-  describe('when a single audience is specified for validation', function(){
-    var audience = 'https://expected.audience.com'; 
+  describe('when a single audience is specified for validation', async function(){
+    var audience = 'https://expected.audience.com';
+    var newServer = new Hapi.Server({ debug: false });
 
-    var server = new Hapi.Server({ debug: false });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
+    before(async function () {
 
-      server.auth.strategy('default', 'jwt', 'required', { key: privateKey, validateFunc: loadUser, audience: audience});
+      await newServer .register(require('../'))
+      newServer.auth.strategy('default', 'jwt', { key: privateKey, validateFunc: loadUser, audience: audience});
+      newServer.auth.default('default');
 
-      server.route([
+      newServer .route([
         { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } }
       ]);
+
+      await newServer .start();
     });
-    
-    it('fails if token audience is empty', function (done) {
+
+    it('fails if token audience is empty', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt audience invalid. expected: ' + audience);
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt audience invalid. expected: ' + audience);
+      expect(res.statusCode).to.equal(401);
     });
 
-    it('fails if token audience is invalid', function (done) {
-  
+    it('fails if token audience is invalid', async function () {
+
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {audience:'https://invalid.audience.com'}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt audience invalid. expected: ' + audience);
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt audience invalid. expected: ' + audience);
+      expect(res.statusCode).to.equal(401);
     });
 
-    it('works if token audience is valid', function (done) {
-  
+    it('works if token audience is valid', async function () {
+
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {audience: audience}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result).to.exist;
-        expect(res.statusCode).to.equal(200);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result).to.exist;
+      expect(res.statusCode).to.equal(200);
     });
-
   });
 
   describe('when an array of audiences is specified for validation', function(){
-    var audience = 'https://expected.audience.com'; 
+    var audience = 'https://expected.audience.com';
 
-    var server = new Hapi.Server({ debug: false });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
+    var newServer = new Hapi.Server({ debug: false });
 
-      server.auth.strategy('default', 'jwt', 'required', { key: privateKey, validateFunc: loadUser, audience: [audience, 'audience2', 'audience3']});
+    before(async function () {
+      await newServer.register(require('../'))
+      newServer.auth.strategy('default', 'jwt', { key: privateKey, validateFunc: loadUser, audience: [audience, 'audience2', 'audience3']});
+      newServer.auth.default('default');
 
-      server.route([
+      newServer.route([
         { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } }
       ]);
+
+      await newServer.start();
     });
-    
-    it('fails if token audience is empty', function (done) {
+
+    it('fails if token audience is empty', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt audience invalid. expected: ' + audience + ' or audience2 or audience3');
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt audience invalid. expected: ' + audience + ' or audience2 or audience3');
+      expect(res.statusCode).to.equal(401);
     });
 
-    it('fails if token audience is invalid', function (done) {
-  
+    it('fails if token audience is invalid', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {audience:'https://invalid.audience.com'}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt audience invalid. expected: ' + audience + ' or audience2 or audience3');
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt audience invalid. expected: ' + audience + ' or audience2 or audience3');
+      expect(res.statusCode).to.equal(401);
     });
 
-    it('works if token audience is one of the expected values', function (done) {
-  
+    it('works if token audience is one of the expected values', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {audience: audience}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result).to.exist;
-        expect(res.statusCode).to.equal(200);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result).to.exist;
+      expect(res.statusCode).to.equal(200);
     });
 
   });
 
   describe('when a single issuer is specified for validation', function(){
-    var issuer = 'http://expected.issuer'; 
-    
-    var server = new Hapi.Server({ debug: false});
-    server.log(['error', 'database', 'read']);
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
+    var issuer = 'http://expected.issuer';
 
-      server.auth.strategy('default', 'jwt', 'required', { key: privateKey, validateFunc: loadUser, issuer: issuer});
+    var newServer = new Hapi.Server({ debug: false });
 
-      server.route([
+    before(async function () {
+      await newServer.register(require('../'))
+      newServer.auth.strategy('default', 'jwt', { key: privateKey, validateFunc: loadUser, issuer: issuer});
+      newServer.auth.default('default');
+
+      newServer.route([
         { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } }
       ]);
+
+      await newServer.start();
     });
-    
-    it('fails if token issuer is empty', function (done) {
-  
+
+    it('fails if token issuer is empty', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt issuer invalid. expected: ' + issuer);
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt issuer invalid. expected: ' + issuer);
+      expect(res.statusCode).to.equal(401);
     });
 
-    it('fails if token issuer is invalid', function (done) {
-  
+    it('fails if token issuer is invalid', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {issuer:'https://invalid.issuer'}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt issuer invalid. expected: ' + issuer);
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt issuer invalid. expected: ' + issuer);
+      expect(res.statusCode).to.equal(401);
     });
 
-    it('works if token issuer is valid', function (done) {
-  
+    it('works if token issuer is valid', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {issuer: issuer}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result).to.exist;
-        expect(res.statusCode).to.equal(200);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result).to.exist;
+      expect(res.statusCode).to.equal(200);
     });
 
   });
 
   describe('when an array of issuers are specified for validation', function(){
-    var issuer = 'http://expected.issuer'; 
-    
-    var server = new Hapi.Server({ debug: false});
-    server.log(['error', 'database', 'read']);
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
+    var issuer = 'http://expected.issuer';
 
-      server.auth.strategy('default', 'jwt', 'required', { key: privateKey, validateFunc: loadUser, issuer: [issuer,'issuer2','issuer3']});
+    var newServer = new Hapi.Server({ debug: false });
+    newServer.log(['error', 'database', 'read']);
 
-      server.route([
+    before(async function () {
+      await newServer.register(require('../'))
+      newServer.auth.strategy('default', 'jwt', { key: privateKey, validateFunc: loadUser, issuer: [issuer,'issuer2','issuer3']});
+      newServer.auth.default('default');
+
+      newServer.route([
         { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } }
       ]);
+
+      await newServer.start();
     });
-    
-    it('fails if token issuer is empty', function (done) {
-  
+
+    it('fails if token issuer is empty', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt issuer invalid. expected: ' + issuer + ',issuer2,issuer3');
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt issuer invalid. expected: ' + issuer + ',issuer2,issuer3');
+      expect(res.statusCode).to.equal(401);
     });
 
-    it('fails if token issuer is invalid', function (done) {
-  
+    it('fails if token issuer is invalid', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {issuer:'https://invalid.issuer'}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt issuer invalid. expected: ' + issuer + ',issuer2,issuer3');
-        expect(res.statusCode).to.equal(401);
-        done();
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt issuer invalid. expected: ' + issuer + ',issuer2,issuer3');
+      expect(res.statusCode).to.equal(401);
       });
-    });
 
-    it('works if token issuer contains one of the expected issuers valid', function (done) {
-  
+    it('works if token issuer contains one of the expected issuers valid', async function () {
+
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {issuer: issuer}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result).to.exist;
-        expect(res.statusCode).to.equal(200);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result).to.exist;
+      expect(res.statusCode).to.equal(200);
     });
 
   });
 
   describe('when RS256 is specified as algorithm for validation', function(){
-    var issuer = 'http://expected.issuer'; 
-    
-    var server = new Hapi.Server({ debug: false});
-    server.log(['error', 'database', 'read']);
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
+    var newServer = new Hapi.Server({ debug: false });
 
-      server.auth.strategy('default', 'jwt', 'required', { key: privateKey, validateFunc: loadUser, algorithms: ['RS256']});
+    before(async function () {
+      await newServer.register(require('../'))
+      newServer.auth.strategy('default', 'jwt', { key: privateKey, validateFunc: loadUser, algorithms: ['RS256'] });
+      newServer.auth.default('default');
 
-      server.route([
+      newServer.route([
         { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } }
       ]);
+
+      await newServer.start();
     });
-    
-    it('fails if token is signed with HS256 algorithm', function (done) {
-  
+
+    it('fails if token is signed with HS256 algorithm', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'invalid algorithm');
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'invalid algorithm');
+      expect(res.statusCode).to.equal(401);
     });
   });
 
   describe('when HS256 is specified as algorithm for validation', function(){
-    var issuer = 'http://expected.issuer'; 
-    
-    var server = new Hapi.Server({ debug: false});
-    server.log(['error', 'database', 'read']);
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
+    var newServer = new Hapi.Server({ debug: false });
 
-      server.auth.strategy('default', 'jwt', 'required', { key: privateKey, validateFunc: loadUser, algorithms: ['HS256']});
+    before(async function () {
+      await newServer.register(require('../'))
+      newServer.auth.strategy('default', 'jwt', { key: privateKey, validateFunc: loadUser, algorithms: ['HS256'] });
+      newServer.auth.default('default');
 
-      server.route([
+      newServer.route([
         { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } }
       ]);
+
+      await newServer.start();
     });
-    
-    it('works if token is signed with HS256 algorithm', function (done) {
-  
+
+    it('works if token is signed with HS256 algorithm', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') } };
 
-      server.inject(request, function (res) {
-        expect(res.result).to.exist;
-        expect(res.statusCode).to.equal(200);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result).to.exist;
+      expect(res.statusCode).to.equal(200);
     });
   });
 
   describe('when subject is specified for validation', function(){
-    var subject = 'http://expected.subject'; 
-    
-    var server = new Hapi.Server({ debug: false});
-    server.log(['error', 'database', 'read']);
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
+    var subject = 'http://expected.subject';
 
-      server.auth.strategy('default', 'jwt', 'required', { key: privateKey, validateFunc: loadUser, subject: subject});
+    var newServer = new Hapi.Server({ debug: false });
 
-      server.route([
+    before(async function () {
+      await newServer.register(require('../'))
+      newServer.auth.strategy('default', 'jwt', { key: privateKey, validateFunc: loadUser, subject: subject });
+      newServer.auth.default('default');
+
+      newServer.route([
         { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } }
       ]);
+
+      await newServer.start();
     });
-    
-    it('fails if token subject is empty', function (done) {
-  
+
+    it('fails if token subject is empty', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john') } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt subject invalid. expected: ' + subject);
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt subject invalid. expected: ' + subject);
+      expect(res.statusCode).to.equal(401);
     });
 
-    it('fails if token subject is invalid', function (done) {
-  
+    it('fails if token subject is invalid', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {subject:'https://invalid.subject'}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt subject invalid. expected: ' + subject);
-        expect(res.statusCode).to.equal(401);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result.message).to.equal(jwtErrorPrefix + 'jwt subject invalid. expected: ' + subject);
+      expect(res.statusCode).to.equal(401);
     });
 
-    it('works if token subject is valid', function (done) {
-  
+    it('works if token subject is valid', async function () {
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader('john', {subject: subject}) } };
 
-      server.inject(request, function (res) {
-        expect(res.result).to.exist;
-        expect(res.statusCode).to.equal(200);
-        done();
-      });
+      const res = await newServer.inject(request);
+      expect(res.result).to.exist;
+      expect(res.statusCode).to.equal(200);
     });
 
   });
@@ -626,139 +541,100 @@ describe('Token', function () {
 });
 
 describe('Strategy', function(){
-    
-  it('should fail if strategy is initialized without options', function (done) {
-    var server = new Hapi.Server({ debug: false  });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
-      try {
-        server.auth.strategy('default', 'jwt', 'required');
-        done('Should have failed')
-      }
-      catch(err){
-        expect(err).to.exist;
-        expect(err.message).to.equal('"jwt auth strategy options" must be an object');
-        done();
-      }
-    });
+
+  it('should fail if strategy is initialized without options', async function () {
+    var server = new Hapi.Server({ debug: false });
+    await server.register(require('../'))
+    try {
+      server.auth.strategy('default', 'jwt', null);
+    }
+    catch(err){
+      expect(err).to.exist;
+      expect(err.message).to.equal('"jwt auth strategy options" must be an object');
+    }
   });
 
-  it('should fail if strategy is initialized with a string as options', function (done) {
-    var server = new Hapi.Server({ debug: false  });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
-      try {
-        server.auth.strategy('default', 'jwt', 'required', 'wrong options type');
-        done('Should have failed')
-      }
-      catch(err){
-        expect(err).to.exist;
-        expect(err.message).to.equal('"jwt auth strategy options" must be an object');
-        done();
-      }
-    });
+  it('should fail if strategy is initialized with a string as options', async function () {
+    var server = new Hapi.Server({ debug: false });
+    await server.register(require('../'))
+    try {
+      server.auth.strategy('default', 'jwt', 'wrong options type');
+    }
+    catch(err){
+      expect(err).to.exist;
+      expect(err.message).to.equal('options must be an object');
+    }
   });
 
-  it('should fail if strategy is initialized with an array as options', function (done) {
-    var server = new Hapi.Server({ debug: false  });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
-      try {
-        server.auth.strategy('default', 'jwt', 'required', ['wrong', 'options', 'type']);
-        done('Should have failed')
-      }
-      catch(err){
-        expect(err).to.exist;
-        expect(err.message).to.equal('"jwt auth strategy options" must be an object');
-        done();
-      }
-    });
+
+  it('should fail if strategy is initialized with an array as options', async function () {
+    var server = new Hapi.Server({ debug: false });
+    await server.register(require('../'))
+    try {
+      server.auth.strategy('default', 'jwt', ['wrong', 'options', 'type']);
+     }
+    catch(err){
+      expect(err).to.exist;
+      expect(err.message).to.equal('"jwt auth strategy options" must be an object');
+    }
   });
 
-  it('should fail if strategy is initialized with a function as options', function (done) {
-    var server = new Hapi.Server({ debug: false  });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
-      try {
-        server.auth.strategy('default', 'jwt', 'required', function options(){});
-        done('Should have failed')
-      }
-      catch(err){
-        expect(err).to.exist;
-        expect(err.message).to.equal('"jwt auth strategy options" must be an object');
-        done();
-      }
-    });
+  it('should fail if strategy is initialized with a function as options', async function () {
+    var server = new Hapi.Server({ debug: false });
+
+    await server.register(require('../'))
+    try {
+      server.auth.strategy('default', 'jwt', function options(){});
+    }
+    catch(err){
+      expect(err).to.exist;
+      expect(err.message).to.equal('options must be an object');
+    }
   });
 
-  it('should fail if strategy is initialized without a key in options', function (done) {
-    var server = new Hapi.Server({ debug: false  });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
-      try {
-        server.auth.strategy('default', 'jwt', 'required', {});
-        done(new Error('Should have failed without key in the options'))
-      }
-      catch(err){
-        expect(err).to.exist;
-        expect(err.message).to.equal('child "key" fails because ["key" is required]');
-        done();
-      }
-    });
+  it('should fail if strategy is initialized without a key in options', async function () {
+    var server = new Hapi.Server({ debug: false });
+    await server.register(require('../'));
+    try {
+      server.auth.strategy('default', 'jwt', {});
+    }
+    catch(err){
+      expect(err).to.exist;
+      expect(err.message).to.equal('child "key" fails because ["key" is required]');
+    }
   });
 
-  it('should fail if strategy is initialized with an invalid key type in options', function (done) {
+
+  it('should fail if strategy is initialized with an invalid key type in options', async function () {
     var server = new Hapi.Server({ debug: false  });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
-      try {
-        server.auth.strategy('default', 'jwt', 'required', {key:10});
-        done(new Error('Should have failed with an invalid key type in options'))
-      }
-      catch(err){
-        expect(err).to.exist;
-        expect(err.message).to.equal('child "key" fails because ["key" must be a buffer or a string, "key" must be a Function]');
-        done();
-      }
-    });
+    await server.register(require('../'));
+    try {
+      server.auth.strategy('default', 'jwt', {key:10});
+    }
+    catch(err){
+      expect(err.message).to.equal('child "key" fails because ["key" must be a buffer or a string, "key" must be a Function]');
+    }
   });
 
-  it('should work if strategy is initialized with a Bugger as key in options', function (done) {
+  it('should work if strategy is initialized with a Bugger as key in options', async function () {
     var server = new Hapi.Server({ debug: false  });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
-      try {
-        server.auth.strategy('default', 'jwt', 'required', {key: new Buffer('mySuperSecret', 'base64')});
-        done();
-      }
-      catch(err){
-        done(err);
-      }
-    });
+    await server.register(require('../'));
+    try {
+      server.auth.strategy('default', 'jwt', {key: new Buffer('mySuperSecret', 'base64')});
+    } catch (e) {
+      Code.fail('This should not occur');
+    }
   });
 
-  it('should fail if strategy is initialized with an invalid audience type in options', function (done) {
-    var server = new Hapi.Server({ debug: false  });
-    server.connection();
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
-      try {
-        server.auth.strategy('default', 'jwt', 'required', {key: '123456', audience: 123});
-        done(new Error('Should have failed with an invalid audience type in options'))
-      }
-      catch(err){
-        expect(err).to.exist;
-        expect(err.message).to.equal('child "audience" fails because ["audience" must be a string, "audience" must be an array]');
-        done();
-      }
-    });
+  it('should fail if strategy is initialized with an invalid audience type in options', async function () {
+    var server = new Hapi.Server({ debug: false });
+    await server.register(require('../'));
+    try {
+      server.auth.strategy('default', 'jwt', {key: '123456', audience: 123});
+    }
+    catch(err){
+      expect(err).to.exist;
+      expect(err.message).to.equal('child "audience" fails because ["audience" must be a string, "audience" must be an array]');
+    }
   });
-
 });

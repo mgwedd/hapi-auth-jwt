@@ -37,106 +37,97 @@ describe('Dynamic Secret', function () {
     return 'Bearer ' + jwt.sign({username: username}, keys[username], options);
   };
 
-  var tokenHandler = function (request, reply) {
-    reply(request.auth.credentials.username);
+  var tokenHandler = function (request, h) {
+    return request.auth.credentials.username;
   };
 
-  var getKey = function(req, token, callback){
+  var getKey = async function(req, token){
     getKey.lastToken = token;
     var data = jwt.decode(token);
-    Hoek.nextTick(function(){
-      callback(null, keys[data.username], info[data.username]);
-    })();
+
+    return {
+      key: keys[data.username],
+      extraInfo: info[data.username]
+    }
   };
 
-  var validateFunc = function(decoded, extraInfo, callback){
+  var validateFunc = function(decoded, extraInfo){
     validateFunc.lastExtraInfo = extraInfo;
-    callback(null, true, decoded);
+
+    return {
+      isValid: true,
+      credentials: decoded
+    };
   };
 
-  var errorGetKey = function(req, token, callback){
-    callback(new Error('Failed'));
+  var errorGetKey = function(req, token){
+    throw new Error('Failed');
   };
 
-  var boomErrorGetKey = function(req, token, callback){
-    callback(Boom.forbidden('forbidden'));
+  var boomErrorGetKey = function(req, token){
+    throw Boom.forbidden('forbidden');
   };
 
   var server = new Hapi.Server({ debug: false });
-  server.connection();
 
-  before(function (done) {
-    server.register(require('../'), function (err) {
-      expect(err).to.not.exist;
-      server.auth.strategy('normalError', 'jwt', false, { key: errorGetKey });
-      server.auth.strategy('boomError', 'jwt', false, { key: boomErrorGetKey });
-      server.auth.strategy('default', 'jwt', false, { key: getKey, validateFunc: validateFunc });
-      server.route([
-        { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } },
-        { method: 'POST', path: '/normalError', handler: tokenHandler, config: { auth: 'normalError' } },
-        { method: 'POST', path: '/boomError', handler: tokenHandler, config: { auth: 'boomError' } }
-      ]);
-
-      done();
-    });
+  before(async function () {
+    await server.register(require('../'))
+    server.auth.strategy('normalError', 'jwt', { key: errorGetKey });
+    server.auth.strategy('boomError', 'jwt', { key: boomErrorGetKey });
+    server.auth.strategy('default', 'jwt', { key: getKey, validateFunc: validateFunc });
+    server.route([
+      { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } },
+      { method: 'POST', path: '/normalError', handler: tokenHandler, config: { auth: 'normalError' } },
+      { method: 'POST', path: '/boomError', handler: tokenHandler, config: { auth: 'boomError' } }
+    ]);
   });
 
   ['jane', 'john'].forEach(function(user){
 
-    it('uses key function passing ' + user + '\'s token if ' + user + ' is user', function (done) {
+    it('uses key function passing ' + user + '\'s token if ' + user + ' is user', async function () {
 
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader(user) } };
 
-      server.inject(request, function (res) {
-        expect(res.result).to.exist;
-        expect(res.result).to.equal(user);
+      var res = await server.inject(request);
+      expect(res.result).to.exist;
+      expect(res.result).to.equal(user);
 
-        jwt.verify(getKey.lastToken, keys[user], function(err, decoded){
-          if (err) { return done(err); }
-          expect(decoded.username).to.equal(user);
+      const decoded = await jwt.verify(getKey.lastToken, keys[user]);
+      expect(decoded.username).to.equal(user);
 
-          done();
-        });
-      });
     });
 
-    it('uses validateFunc function passing ' + user + '\'s extra info if ' + user + ' is user', function (done) {
+    it('uses validateFunc function passing ' + user + '\'s extra info if ' + user + ' is user', async function () {
 
       var request = { method: 'POST', url: '/token', headers: { authorization: tokenHeader(user) } };
 
-      server.inject(request, function (res) {
-        expect(res.result).to.exist;
-        expect(res.result).to.equal(user);
+      const res = await server.inject(request);
 
-        expect(validateFunc.lastExtraInfo).to.equal(info[user]);
-        done();
-      });
+      expect(res.result).to.exist;
+      expect(res.result).to.equal(user);
+
+      expect(validateFunc.lastExtraInfo).to.equal(info[user]);
     });
   });
 
-  it('return 500 if an is error thrown when getting key', function(done){
+  it('return 500 if an is error thrown when getting key', async function(){
 
     var request = { method: 'POST', url: '/normalError', headers: { authorization: tokenHeader('john') } };
 
-    server.inject(request, function (res) {
-      expect(res).to.exist;
-      expect(res.result.statusCode).to.equal(500);
-      expect(res.result.error).to.equal('Internal Server Error');
-      expect(res.result.message).to.equal('An internal server error occurred');
-      done();
-    });
+    var res = await server.inject(request);
+    expect(res).to.exist;
+    expect(res.result.statusCode).to.equal(500);
+    expect(res.result.error).to.equal('Internal Server Error');
+    expect(res.result.message).to.equal('An internal server error occurred');
   });
 
-  it('return 403 if an is error thrown when getting key', function(done){
+  it('return 403 if an is error thrown when getting key', async function(){
 
     var request = { method: 'POST', url: '/boomError', headers: { authorization: tokenHeader('john') } };
-
-    server.inject(request, function (res) {
-      expect(res).to.exist;
-      expect(res.result.statusCode).to.equal(403);
-      expect(res.result.error).to.equal('Forbidden');
-      expect(res.result.message).to.equal('forbidden');
-      done();
-    });
+    var res = await server.inject(request);
+    expect(res).to.exist;
+    expect(res.result.statusCode).to.equal(403);
+    expect(res.result.error).to.equal('Forbidden');
+    expect(res.result.message).to.equal('forbidden');
   });
 });
