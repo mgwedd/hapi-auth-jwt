@@ -24,14 +24,12 @@ See the example folder for an executable example.
 
 ```javascript
 
-var Hapi = require('hapi'),
-    jwt = require('jsonwebtoken'),
-    server = new Hapi.Server();
-
-server.connection({ port: 8080 });
+const Hapi = require('hapi');
+const jwt = require('jsonwebtoken');
+const server = new Hapi.Server({ port: 8080 });
 
 
-var accounts = {
+const accounts = {
     123: {
         id: 123,
         user: 'john',
@@ -41,57 +39,58 @@ var accounts = {
 };
 
 
-var privateKey = 'BbZJjyoXAdr8BUZuiKKARWimKfrSmQ6fv8kZ7OFfc';
+const privateKey = 'BbZJjyoXAdr8BUZuiKKARWimKfrSmQ6fv8kZ7OFfc';
 
-// Use this token to build your request with the 'Authorization' header.  
+// Use this token to build your request with the 'Authorization' header.
 // Ex:
 //     Authorization: Bearer <token>
-var token = jwt.sign({ accountId: 123 }, privateKey);
+const token = jwt.sign({ accountId: 123 }, privateKey);
 
 
-var validate = function (decodedToken, extraInfo, callback) {
+const validate = async function (decodedToken, extraInfo) {
 
-    var error,
-        credentials = accounts[decodedToken.accountId] || {};
+    var credentials = accounts[decodedToken.accountId] || {};
 
     if (!credentials) {
-        return callback(error, false, credentials);
+        return { isValid: false };
     }
 
-    return callback(error, true, credentials)
+    return {
+      isValid: true,
+      credentials
+    }
 };
 
 
-server.register(require('hapi-auth-jwt'), function (error) {
+await server.register(require('hapi-auth-jwt'));
 
-    server.auth.strategy('token', 'jwt', {
-        key: privateKey,
-        validateFunc: validate
-    });
+server.auth.strategy('token', 'jwt', {
+    key: privateKey,
+    validateFunc: validate
+});
 
-    server.route({
-        method: 'GET',
-        path: '/',
-        config: {
-            auth: 'token'
-        }
-    });
+server.route({
+    method: 'GET',
+    path: '/',
+    config: {
+        auth: 'token'
+    }
+});
 
     // With scope requirements
-    server.route({
-        method: 'GET',
-        path: '/withScope',
-        config: {
-            auth: {
-                strategy: 'token',
-                scope: ['a']
-            }
+server.route({
+    method: 'GET',
+    path: '/withScope',
+    config: {
+        auth: {
+            strategy: 'token',
+            scope: ['a']
         }
-    });
+    }
 });
 
 
-server.start();
+await server.start();
 
 ```
 
@@ -106,4 +105,4 @@ server.auth.strategy('token', 'jwt', {
     algorithms: ['RS256'],
     subject: 'myRequiredSubject'
 });
-```    
+```
