@@ -12,7 +12,7 @@
     "JWT"
   ],
   "engines": {
-    "node": ">=8.x.x"
+    "node": ">=8.9.x"
   },
   "dependencies": {
     "boom": "2.x.x",

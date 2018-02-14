@@ -278,11 +278,11 @@ describe('Token', function () {
 
     before(async function () {
 
-      await newServer .register(require('../'))
+      await newServer.register(require('../'))
       newServer.auth.strategy('default', 'jwt', { key: privateKey, validateFunc: loadUser, audience: audience});
       newServer.auth.default('default');
 
-      newServer .route([
+      newServer.route([
         { method: 'POST', path: '/token', handler: tokenHandler, config: { auth: 'default' } }
       ]);
 
@@ -547,8 +547,8 @@ describe('Strategy', function(){
     await server.register(require('../'))
     try {
       server.auth.strategy('default', 'jwt', null);
-    }
-    catch(err){
+      expect.fail('should have thrown');
+    } catch(err){
       expect(err).to.exist;
       expect(err.message).to.equal('"jwt auth strategy options" must be an object');
     }
@@ -559,8 +559,8 @@ describe('Strategy', function(){
     await server.register(require('../'))
     try {
       server.auth.strategy('default', 'jwt', 'wrong options type');
-    }
-    catch(err){
+      expect.fail('should have thrown');
+    } catch(err){
       expect(err).to.exist;
       expect(err.message).to.equal('options must be an object');
     }
@@ -572,8 +572,8 @@ describe('Strategy', function(){
     await server.register(require('../'))
     try {
       server.auth.strategy('default', 'jwt', ['wrong', 'options', 'type']);
-     }
-    catch(err){
+      expect.fail('should have thrown');
+    } catch(err){
       expect(err).to.exist;
       expect(err.message).to.equal('"jwt auth strategy options" must be an object');
     }
@@ -585,8 +585,8 @@ describe('Strategy', function(){
     await server.register(require('../'))
     try {
       server.auth.strategy('default', 'jwt', function options(){});
-    }
-    catch(err){
+      expect.fail('should have thrown');
+    } catch(err){
       expect(err).to.exist;
       expect(err.message).to.equal('options must be an object');
     }
@@ -597,8 +597,8 @@ describe('Strategy', function(){
     await server.register(require('../'));
     try {
       server.auth.strategy('default', 'jwt', {});
-    }
-    catch(err){
+      expect.fail('should have thrown');
+    } catch(err){
       expect(err).to.exist;
       expect(err.message).to.equal('child "key" fails because ["key" is required]');
     }
@@ -610,8 +610,8 @@ describe('Strategy', function(){
     await server.register(require('../'));
     try {
       server.auth.strategy('default', 'jwt', {key:10});
-    }
-    catch(err){
+      expect.fail('should have thrown');
+    } catch(err){
       expect(err.message).to.equal('child "key" fails because ["key" must be a buffer or a string, "key" must be a Function]');
     }
   });
@@ -631,8 +631,8 @@ describe('Strategy', function(){
     await server.register(require('../'));
     try {
       server.auth.strategy('default', 'jwt', {key: '123456', audience: 123});
-    }
-    catch(err){
+      expect.fail('should have thrown');
+    } catch(err){
       expect(err).to.exist;
       expect(err.message).to.equal('child "audience" fails because ["audience" must be a string, "audience" must be an array]');
     }

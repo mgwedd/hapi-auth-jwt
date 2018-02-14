@@ -24,12 +24,12 @@ See the example folder for an executable example.
 
 ```javascript
 
-var Hapi = require('hapi'),
-    jwt = require('jsonwebtoken'),
-    server = new Hapi.Server({ port: 8080 });
+const Hapi = require('hapi');
+const jwt = require('jsonwebtoken');
+const server = new Hapi.Server({ port: 8080 });
 
 
-var accounts = {
+const accounts = {
     123: {
         id: 123,
         user: 'john',
@@ -39,15 +39,15 @@ var accounts = {
 };
 
 
-var privateKey = 'BbZJjyoXAdr8BUZuiKKARWimKfrSmQ6fv8kZ7OFfc';
+const privateKey = 'BbZJjyoXAdr8BUZuiKKARWimKfrSmQ6fv8kZ7OFfc';
 
-// Use this token to build your request with the 'Authorization' header.  
+// Use this token to build your request with the 'Authorization' header.
 // Ex:
 //     Authorization: Bearer <token>
-var token = jwt.sign({ accountId: 123 }, privateKey);
+const token = jwt.sign({ accountId: 123 }, privateKey);
 
 
-var validate = async function (decodedToken, extraInfo) {
+const validate = async function (decodedToken, extraInfo) {
 
     var credentials = accounts[decodedToken.accountId] || {};
 
@@ -55,9 +55,9 @@ var validate = async function (decodedToken, extraInfo) {
         return { isValid: false };
     }
 
-    return { 
-      isValid: true, 
-      credentials:credentials 
+    return {
+      isValid: true,
+      credentials
     }
 };
 
@@ -105,4 +105,4 @@ server.auth.strategy('token', 'jwt', {
     algorithms: ['RS256'],
     subject: 'myRequiredSubject'
 });
-```    
+```
