@@ -15,10 +15,10 @@
     "node": ">=8.9.x"
   },
   "dependencies": {
-    "boom": "2.x.x",
-    "hoek": "2.x.x",
-    "joi": "^10.0.1",
-    "jsonwebtoken": "^5.4.1"
+    "boom": "^7.1.1",
+    "hoek": "^5.0.3",
+    "joi": "^13.1.2",
+    "jsonwebtoken": "^8.1.1"
   },
   "devDependencies": {
     "code": "5.x.x",
