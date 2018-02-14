@@ -51,7 +51,7 @@ describe('Dynamic Secret', function () {
     }
   };
 
-  var validateFunc = function(decoded, extraInfo){
+  var validateFunc = async function(decoded, extraInfo){
     validateFunc.lastExtraInfo = extraInfo;
 
     return {

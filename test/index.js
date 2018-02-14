@@ -406,7 +406,6 @@ describe('Token', function () {
     var issuer = 'http://expected.issuer';
 
     var newServer = new Hapi.Server({ debug: false });
-    newServer.log(['error', 'database', 'read']);
 
     before(async function () {
       await newServer.register(require('../'))
@@ -616,7 +615,7 @@ describe('Strategy', function(){
     }
   });
 
-  it('should work if strategy is initialized with a Bugger as key in options', async function () {
+  it('should work if strategy is initialized with a Buffer as key in options', async function () {
     var server = new Hapi.Server({ debug: false  });
     await server.register(require('../'));
     try {
