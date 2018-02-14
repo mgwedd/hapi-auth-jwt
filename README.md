@@ -1,10 +1,14 @@
 ### hapi-auth-jwt
 
-[**hapi**](https://github.com/spumko/hapi) JSON Web Token (JWT) authentication plugin
-
-[![Build Status](https://travis-ci.org/ryanfitz/hapi-auth-jwt.png?branch=master)](https://travis-ci.org/ryanfitz/hapi-auth-jwt)
+[**hapi**](https://github.com/japijs/hapi) JSON Web Token (JWT) authentication plugin
 
 JSON Web Token authentication requires verifying a signed token. The `'jwt'` scheme takes the following options:
+
+### Hapi < 17
+Use `hapi-auth-jwt < 5` for `hapi < 16`
+
+### Hapi >= 17
+Use `hapi-auth-jwt >= 5` for `hapi >= 17`
 
 - `key` - (required) The private key the token was signed with.
 - `validateFunc` - (optional) validation and user lookup function with the signature `function(token, callback)` where:
